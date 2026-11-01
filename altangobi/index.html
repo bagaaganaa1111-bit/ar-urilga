@@ -76,7 +76,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 /* ===== ТОХИРГОО ===== */
 const CONFIG = {
-  inviteUrl: '../invite.html',      // "Алтан шөнө" цахим урилгын холбоос
+  inviteUrl: './invite.html',       // цахим урилга (зочны нэр ?n= -ээр дамжина)
   target: './targets.mind',
   // Картан дээрх логоны байрлал (px, карт 1240×1748): төв (620,500), өргөн 500
   logo: { cx: 620, cy: 500, w: 500 },
@@ -84,6 +84,7 @@ const CONFIG = {
 const qs = new URLSearchParams(location.search);
 if (qs.get('u')) CONFIG.inviteUrl = qs.get('u');
 if (qs.get('n')) document.getElementById('guestName').textContent = qs.get('n') + ' танаа';
+if (qs.get('n') && !qs.get('u')) CONFIG.inviteUrl += '?n=' + encodeURIComponent(qs.get('n'));
 ['lnkInvite1','lnkInvite2','lnkInvite3'].forEach(id => document.getElementById(id).href = CONFIG.inviteUrl);
 
 const $ = id => document.getElementById(id);
