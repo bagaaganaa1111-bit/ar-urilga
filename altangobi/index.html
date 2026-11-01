@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Өсөх Зоос Алтанговь · AR урилга 2027</title>
+<style>
+  :root{--gold:#e9c46a}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#050403;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  #ar{position:fixed;inset:0}
+  #ar video{object-fit:cover}
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px;z-index:10}
+  .hidden{display:none!important}
+  #start{background:radial-gradient(90% 60% at 50% 30%,#2a2113,#120e08 55%,#050403)}
+  #start img{width:180px;margin-bottom:14px;filter:drop-shadow(0 0 18px rgba(240,196,99,.35))}
+  .co{font-size:12px;letter-spacing:5px;color:#d9b25c;margin-bottom:6px}
+  h1{font-size:46px;margin:0 0 4px;background:linear-gradient(180deg,#fff0bf,#f0c463 45%,#b07a22);-webkit-background-clip:text;color:transparent}
+  p{margin:6px 0;line-height:1.5;color:#e9dcbc;max-width:340px}
+  .guest{font-size:22px;color:#fff;font-weight:700;margin:4px 0 8px}
+  .btn{display:inline-block;margin-top:16px;padding:16px 28px;border-radius:40px;border:0;font-size:18px;font-weight:700;
+       background:linear-gradient(180deg,#ffe8a3,#c9973a);color:#1a1200;text-decoration:none;cursor:pointer;min-width:240px}
+  .btn.ghost{background:transparent;color:var(--gold);border:2px solid var(--gold);font-weight:600}
+  #hint{position:fixed;left:0;right:0;bottom:0;z-index:5;pointer-events:none;display:flex;justify-content:center;padding-bottom:40px}
+  #frame{position:fixed;top:50%;left:50%;width:58vw;max-width:300px;aspect-ratio:1240/1748;transform:translate(-50%,-55%);
+         border:3px dashed rgba(233,196,106,.85);border-radius:10px;z-index:5;pointer-events:none;animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  .pill{background:rgba(5,4,3,.75);padding:12px 20px;border-radius:30px;font-size:16px}
+  #cta{position:fixed;left:0;right:0;bottom:34px;z-index:6;display:flex;justify-content:center}
+  #spinner{width:42px;height:42px;border:4px solid rgba(233,196,106,.25);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin:18px auto 0}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #flash{position:fixed;inset:0;z-index:4;pointer-events:none;background:radial-gradient(circle at 50% 45%,rgba(255,236,170,.95),rgba(255,200,90,.35) 35%,transparent 65%);opacity:0;transition:opacity .5s}
+  #view3d{position:fixed;inset:0;z-index:1}
+  #backbar{position:fixed;top:14px;left:14px;z-index:6}
+  #backbar button{background:rgba(5,4,3,.7);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:8px 14px;font-size:14px}
+</style>
+<script type="importmap">
+{ "imports": { "three": "../lib/three.module.js", "three/addons/": "../lib/addons/" } }
+</script>
+</head>
+<body>
+
+<div id="start" class="screen">
+  <img src="logo.svg" alt="">
+  <div class="co">ӨСӨХ ЗООС АЛТАНГОВЬ ХХК</div>
+  <h1>2027</h1>
+  <div class="guest" id="guestName">Саруулбилэг танаа</div>
+  <p>Камераа нээгээд <b>урилгын карт</b> руугаа чиглүүлээрэй.</p>
+  <button id="btnStart" class="btn">📷 3D-ээр харах</button>
+  <a class="btn ghost" id="lnkInvite1" href="#">Урилгаа шууд нээх</a>
+</div>
+
+<div id="loading" class="screen hidden" style="background:#050403"><p>Камер асааж байна…</p><div id="spinner"></div></div>
+
+<div id="fail" class="screen hidden" style="background:#050403">
+  <h1 style="font-size:30px">Камер нээгдсэнгүй</h1>
+  <p id="failMsg">Камерын зөвшөөрөл өгөөгүй эсвэл энэ утас AR дэмжихгүй байна.</p>
+  <button id="btnNoCam" class="btn">✨ 3D-г камергүй харах</button>
+  <a class="btn ghost" id="lnkInvite2" href="#">Урилгаа нээх</a>
+  <button id="btnRetry" class="btn ghost" style="border:0;font-size:15px;text-decoration:underline">Дахин оролдох</button>
+</div>
+
+<div id="ar"></div>
+<div id="flash"></div>
+<div id="frame" class="hidden"></div>
+<div id="hint" class="hidden"><div class="pill">Картаа хүрээнд багтаан барина уу</div></div>
+<div id="cta" class="hidden"><a class="btn" id="lnkInvite3" href="#">💌 Урилгаа нээх</a></div>
+<div id="view3d" class="hidden"></div>
+<div id="backbar" class="hidden"><button id="btnBack">← Буцах</button></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ===== ТОХИРГОО ===== */
+const CONFIG = {
+  inviteUrl: '../invite.html',      // "Алтан шөнө" цахим урилгын холбоос
+  target: './targets.mind',
+  // Картан дээрх логоны байрлал (px, карт 1240×1748): төв (620,500), өргөн 500
+  logo: { cx: 620, cy: 500, w: 500 },
+};
+const qs = new URLSearchParams(location.search);
+if (qs.get('u')) CONFIG.inviteUrl = qs.get('u');
+if (qs.get('n')) document.getElementById('guestName').textContent = qs.get('n') + ' танаа';
+['lnkInvite1','lnkInvite2','lnkInvite3'].forEach(id => document.getElementById(id).href = CONFIG.inviteUrl);
+
+const $ = id => document.getElementById(id);
+const show = (id, on=true) => $(id).classList.toggle('hidden', !on);
+const px2u = { x: v => (v - 620) / 1240, y: v => (874 - v) / 1240, s: v => v / 1240 };
+
+/* ===== 3D лого (SVG → зузаан алт) ===== */
+const svgP = new SVGLoader().loadAsync('./logo.svg');
+
+async function buildContent(isAR) {
+  const data = await svgP;
+  const vb = data.xml.getAttribute('viewBox').split(/\s+/).map(Number);   // [0,0,W,H]
+  const shapes = data.paths.flatMap(p => SVGLoader.createShapes(p));
+  const geo = new THREE.ExtrudeGeometry(shapes, { depth: 70, curveSegments: 10,
+    bevelEnabled: true, bevelThickness: 10, bevelSize: 5, bevelSegments: 3 });
+  geo.translate(-vb[2] / 2, -vb[3] / 2, -35);
+
+  const face = new THREE.MeshStandardMaterial({ color: 0xf5cf6a, metalness: 0.9, roughness: 0.25, emissive: 0x3a2805 });
+  const side = new THREE.MeshStandardMaterial({ color: 0xb07a22, metalness: 0.95, roughness: 0.35, emissive: 0x1c1203 });
+  const logo = new THREE.Mesh(geo, [face, side]);
+  const k = px2u.s(CONFIG.logo.w) / vb[2];
+  logo.scale.set(k, -k, k);                      // SVG-ийн y доошоо тул эргүүлнэ
+
+  const root = new THREE.Group();
+  const pivot = new THREE.Group();               // логоны доод ирмэгээр "босно"
+  const halfH = vb[3] * k / 2;
+  logo.position.y = halfH;
+  pivot.add(logo);
+  pivot.position.set(px2u.x(CONFIG.logo.cx), px2u.y(CONFIG.logo.cy) - halfH, 0);
+  root.add(pivot);
+
+  // Алтан тоосонцор (дээш хөвнө)
+  const N = 220, pos = new Float32Array(N * 3), spd = new Float32Array(N);
+  const cx = px2u.x(CONFIG.logo.cx), cy = px2u.y(CONFIG.logo.cy);
+  const reset = i => { pos[i*3] = cx + (Math.random() - .5) * .55; pos[i*3+1] = cy + (Math.random() - .5) * .4; pos[i*3+2] = Math.random() * .02; };
+  for (let i = 0; i < N; i++) { reset(i); pos[i*3+2] = Math.random() * .5; spd[i] = .05 + Math.random() * .12; }
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const dot = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32,32,0,32,32,32); gr.addColorStop(0,'rgba(255,240,190,1)'); gr.addColorStop(.35,'rgba(240,196,99,.8)'); gr.addColorStop(1,'rgba(240,196,99,0)');
+    g.fillStyle = gr; g.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
+  const dust = new THREE.Points(pg, new THREE.PointsMaterial({ size: .022, map: dot, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  root.add(dust);
+
+  // Гэрэлтэх туяа
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+  glow.scale.set(.9, .9, 1); glow.position.set(cx, cy + .05, .12); root.add(glow);
+
+  // Тэлэх алтан цагираг (гарч ирэх мөчид)
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.2, .215, 96), new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+  ring.position.set(cx, cy, .005); root.add(ring);
+
+  let tShown = -1;   // харагдаж эхэлсэн хугацаа
+  function update(t, dt, visible) {
+    if (visible && tShown < 0) tShown = t;
+    if (!visible) { tShown = -1; }
+    const a = tShown < 0 ? 0 : t - tShown;                    // гарч ирснээс хойшх секунд
+    const e = x => 1 - Math.pow(1 - THREE.MathUtils.clamp(x, 0, 1), 3);
+    // 0–0.4с: карт дээр хавтгай гялалзана; 0.4–1.6с: босож дээш хөөрнө; дараа нь хөвж эргэлдэнэ
+    const lift = isAR ? e((a - .4) / 1.2) : 1;
+    pivot.rotation.x = lift * Math.PI * (isAR ? 0.25 : 0.42);   // AR: 45° — гарт ч, ширээн дээр ч сайн харагдана
+    pivot.position.z = lift * .12 + (lift >= 1 ? Math.sin(t * 1.5) * .012 : 0);
+    logo.rotation.y = lift >= 1 ? Math.sin((t - tShown) * .9) * .55 : 0;
+    root.visible = visible;
+    face.emissiveIntensity = 1 + Math.max(0, 1 - a * 1.5) * 3;   // эхэнд гялс
+    ring.material.opacity = isAR ? Math.max(0, .9 - a * .8) : 0; ring.scale.setScalar(1 + a * 1.8);
+    glow.material.opacity = Math.min(.55, a * .6) * (0.8 + Math.sin(t * 2) * .2);
+    glow.position.z = .05 + lift * .1;
+    const p = pg.attributes.position.array;
+    for (let i = 0; i < N; i++) { p[i*3+2] += spd[i] * dt; p[i*3] += Math.sin(t * 1.3 + i) * .0006;
+      if (p[i*3+2] > .55) reset(i); }
+    pg.attributes.position.needsUpdate = true;
+    dust.material.opacity = Math.min(1, a);
+  }
+  return { root, update, flashAt: () => tShown };
+}
+
+function addEnv(renderer, scene) {
+  const pm = new THREE.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+  const d = new THREE.DirectionalLight(0xffffff, 1.8); d.position.set(.3, 1, 1.2); scene.add(d);
+  scene.add(new THREE.HemisphereLight(0xfff1d0, 0x2a1f0d, 1.0));
+}
+
+/* ===== AR ===== */
+let mindar = null;
+async function startAR() {
+  show('start', false); show('fail', false); show('loading');
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('nocam');
+    const { MindARThree } = await import('../lib/mindar-image-three.prod.js');
+    mindar = new MindARThree({ container: $('ar'), imageTargetSrc: CONFIG.target,
+      uiLoading: 'no', uiScanning: 'no', uiError: 'no',
+      filterMinCF: 0.0001, filterBeta: 0.001, missTolerance: 8, warmupTolerance: 3 });
+    const { renderer, scene, camera } = mindar;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    addEnv(renderer, scene);
+    const c = await buildContent(true);
+    const anchor = mindar.addAnchor(0);
+    anchor.group.add(c.root);
+
+    let found = false;
+    anchor.onTargetFound = () => { found = true; show('hint', false); show('frame', false); show('cta');
+      $('flash').style.opacity = 1; setTimeout(() => $('flash').style.opacity = 0, 180); navigator.vibrate?.(40); };
+    anchor.onTargetLost = () => { found = false; show('hint'); show('frame'); };
+
+    await mindar.start();
+    show('loading', false); show('hint'); show('frame');
+    const clock = new THREE.Clock();
+    renderer.setAnimationLoop(() => { const dt = Math.min(clock.getDelta(), .05);
+      c.update(clock.elapsedTime, dt, found); renderer.render(scene, camera); });
+    window.__ar = { get found() { return found; } };
+  } catch (err) {
+    console.error(err);
+    try { mindar?.stop(); } catch (_) {}
+    show('loading', false); show('hint', false); show('frame', false);
+    $('failMsg').textContent = err?.name === 'NotAllowedError'
+      ? 'Камерын зөвшөөрөл олгоогүй байна. Хөтчийн тохиргооноос зөвшөөрөөд дахин оролдоно уу.'
+      : 'Камер нээгдсэнгүй эсвэл энэ утас AR дэмжихгүй байна.';
+    show('fail');
+  }
+}
+
+/* ===== Камергүй 3D ===== */
+let viewer = null;
+async function startNoCam() {
+  show('fail', false); show('start', false); show('view3d'); show('backbar'); show('cta');
+  if (viewer) return;
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(innerWidth, innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  $('view3d').appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0a0805);
+  addEnv(renderer, scene);
+  const c = await buildContent(false);
+  c.root.rotation.x = -Math.PI / 2;   // картыг "ширээн дээр" хэвтүүлнэ
+  c.root.position.set(0, 0, px2u.y(CONFIG.logo.cy));
+  scene.add(c.root);
+  const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, .01, 50);
+  camera.position.set(0, .4, 1.5);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, .18, 0); controls.enableDamping = true; controls.enablePan = false;
+  controls.minDistance = .5; controls.maxDistance = 2.5;
+  addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+  const clock = new THREE.Clock();
+  renderer.setAnimationLoop(() => { const dt = Math.min(clock.getDelta(), .05); c.update(clock.elapsedTime, dt, true); controls.update(); renderer.render(scene, camera); });
+  viewer = renderer;
+}
+
+$('btnStart').onclick = startAR;
+$('btnRetry').onclick = () => location.reload();
+$('btnNoCam').onclick = startNoCam;
+$('btnBack').onclick = () => location.reload();
+if (qs.get('auto') === '1') startAR();
+</script>
+</body>
+</html>
