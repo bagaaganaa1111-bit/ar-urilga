@@ -131,9 +131,9 @@ async function buildContent(isAR) {
   anims.push({ start: TIMELINE.logo, dur: 1.1, apply: (p, t, a) => {
     const e = easeBack(p);
     logoG.scale.setScalar(Math.max(.0001, .5 + .5 * e));
-    logoG.position.z = .02 + e * .16;
-    logoG.rotation.x = .28 * ease(p) + Math.sin(t * .9) * .03;      // бага зэрэг харагч руу хазайна
-    logoG.rotation.y = Math.sin(t * .6) * .1;                       // зөөлөн, бага найгална
+    logoG.position.z = .02 + e * .1;
+    logoG.rotation.x = 0;                                           // босоо, тэгш
+    logoG.rotation.y = Math.sin((t - TIMELINE.logo) * .8) * .7 * ease(p);   // баруун, зүүн тийш зөөлөн эргэнэ (±40°)
     logoG.visible = p > 0;
     face.emissiveIntensity = 1 + Math.max(0, 1 - (a - TIMELINE.logo) * 1.2) * 3;
   }});
