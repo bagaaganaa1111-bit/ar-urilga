@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>AR урилга 2027</title>
+<style>
+  :root{--gold:#e9c46a;--navy:#0b1a3a}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#050b1c;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  #ar{position:fixed;inset:0}
+  #ar video{object-fit:cover}
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px;z-index:10}
+  .hidden{display:none!important}
+  #start{background:radial-gradient(120% 80% at 50% 20%,#1d3a78,#060f28)}
+  h1{font-size:44px;margin:0 0 6px;color:var(--gold);letter-spacing:2px}
+  p{margin:6px 0;line-height:1.5;color:#e8dcc0;max-width:340px}
+  .btn{display:inline-block;margin-top:18px;padding:16px 28px;border-radius:40px;border:0;font-size:18px;font-weight:700;
+       background:linear-gradient(180deg,#ffe8a3,#d4a640);color:#1a1200;text-decoration:none;cursor:pointer;min-width:240px}
+  .btn.ghost{background:transparent;color:var(--gold);border:2px solid var(--gold);font-weight:600}
+  #hint{position:fixed;left:0;right:0;bottom:0;z-index:5;pointer-events:none;display:flex;flex-direction:column;align-items:center;padding-bottom:40px}
+  #frame{position:fixed;top:50%;left:50%;width:58vw;max-width:300px;aspect-ratio:1240/1748;transform:translate(-50%,-55%);
+         border:3px dashed rgba(233,196,106,.85);border-radius:14px;z-index:5;pointer-events:none;animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  .pill{background:rgba(5,11,28,.75);padding:12px 20px;border-radius:30px;font-size:16px;color:#fff}
+  #cta{position:fixed;left:0;right:0;bottom:34px;z-index:6;display:flex;justify-content:center}
+  #status{font-size:14px;opacity:.7;margin-top:14px;min-height:20px}
+  #spinner{width:42px;height:42px;border:4px solid rgba(233,196,106,.25);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin:18px auto 0}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #view3d{position:fixed;inset:0;z-index:1}
+  #view3d canvas{display:block}
+  #backbar{position:fixed;top:14px;left:14px;z-index:6}
+  #backbar button{background:rgba(5,11,28,.7);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:8px 14px;font-size:14px}
+</style>
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/addons/" } }
+</script>
+</head>
+<body>
+
+<!-- 1. Эхлэх дэлгэц -->
+<div id="start" class="screen">
+  <div style="font-size:15px;letter-spacing:6px;color:var(--gold)">ШИНЭ ЖИЛИЙН УРИЛГА</div>
+  <h1>2027</h1>
+  <p>Камераа нээгээд <b>урилгын карт</b> руугаа чиглүүлэхэд 3D мэндчилгээ гарч ирнэ.</p>
+  <button id="btnStart" class="btn">📷 3D-ээр харах</button>
+  <a class="btn ghost" id="lnkInvite1" href="#">Урилгаа шууд нээх</a>
+  <div id="status"></div>
+</div>
+
+<!-- 2. Ачааллаж байна -->
+<div id="loading" class="screen hidden" style="background:#060f28">
+  <p>Камер асааж байна…</p><div id="spinner"></div>
+</div>
+
+<!-- 3. Камер ажиллахгүй үед -->
+<div id="fail" class="screen hidden" style="background:#060f28">
+  <h1 style="font-size:30px">Камер нээгдсэнгүй</h1>
+  <p id="failMsg">Камерын зөвшөөрөл өгөөгүй эсвэл энэ утас AR дэмжихгүй байна.</p>
+  <button id="btnNoCam" class="btn">✨ 3D-г камергүй харах</button>
+  <a class="btn ghost" id="lnkInvite2" href="#">Урилгаа нээх</a>
+  <button id="btnRetry" class="btn ghost" style="border:0;font-size:15px;text-decoration:underline">Дахин оролдох</button>
+</div>
+
+<!-- AR хэсэг -->
+<div id="ar"></div>
+<div id="frame" class="hidden"></div>
+<div id="hint" class="hidden"><div class="pill">Картаа хүрээнд багтаан барина уу</div></div>
+<div id="cta" class="hidden"><a class="btn" id="lnkInvite3" href="#">💌 Урилгаа нээх</a></div>
+
+<!-- Камергүй 3D -->
+<div id="view3d" class="hidden"></div>
+<div id="backbar" class="hidden"><button id="btnBack">← Буцах</button></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ===== ТОХИРГОО ===== */
+const CONFIG = {
+  inviteUrl: './invite.html',   // цахим урилгын холбоос (зочин бүрт өөр байж болно)
+  text: '2027',
+  target: './targets.mind',
+};
+// ?u=... гэж зочны урилгын холбоосыг QR-аар дамжуулж болно
+const qs = new URLSearchParams(location.search);
+if (qs.get('u')) CONFIG.inviteUrl = qs.get('u');
+['lnkInvite1','lnkInvite2','lnkInvite3'].forEach(id => document.getElementById(id).href = CONFIG.inviteUrl);
+
+const $ = id => document.getElementById(id);
+const show = (id, on=true) => $(id).classList.toggle('hidden', !on);
+
+/* ===== 3D агуулга (AR болон камергүй горимд нэг ижил) ===== */
+const fontP = new FontLoader().loadAsync('./fonts/helvetiker_bold.typeface.json');
+
+async function buildContent() {
+  const font = await fontP;
+  const root = new THREE.Group();
+
+  const gold = new THREE.MeshStandardMaterial({ color: 0xf5cf6a, metalness: 0.85, roughness: 0.28, emissive: 0x3a2a05 });
+  const goldSide = new THREE.MeshStandardMaterial({ color: 0xb8862b, metalness: 1, roughness: 0.35 });
+
+  // 1) Алтан "2027"
+  const tg = new TextGeometry(CONFIG.text, { font, size: 0.22, height: 0.06, depth: 0.06, curveSegments: 6,
+    bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.008, bevelSegments: 3 });
+  tg.computeBoundingBox(); tg.center();
+  const textMesh = new THREE.Mesh(tg, [gold, goldSide]);
+  const textHolder = new THREE.Group(); textHolder.add(textMesh);
+  root.add(textHolder);
+
+  // 2) Эргэлдэх алтан цагираг + жижиг одод
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.012, 12, 96), gold);
+  ring.rotation.x = Math.PI / 2;
+  root.add(ring);
+  const stars = new THREE.Group();
+  const starGeo = new THREE.OctahedronGeometry(0.03, 0);
+  for (let i = 0; i < 10; i++) {
+    const s = new THREE.Mesh(starGeo, gold);
+    const a = i / 10 * Math.PI * 2;
+    s.position.set(Math.cos(a) * 0.42, 0, Math.sin(a) * 0.42);
+    stars.add(s);
+  }
+  root.add(stars);
+
+  // 3) Цас
+  const N = 260, pos = new Float32Array(N * 3), spd = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    pos[i*3] = (Math.random() - .5) * 1.4; pos[i*3+1] = Math.random() * 1.4 - .3; pos[i*3+2] = (Math.random() - .5) * 1.0;
+    spd[i] = .08 + Math.random() * .18;
+  }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const flakeTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32,32,0,32,32,32); gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.4,'rgba(255,255,255,.6)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
+  const snow = new THREE.Points(sg, new THREE.PointsMaterial({ size: 0.035, map: flakeTex, transparent: true, depthWrite: false, color: 0xffffff }));
+  root.add(snow);
+
+  // 4) Гэрлийн туяа (glow)
+  const glowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(64,64,0,64,64,64); gr.addColorStop(0,'rgba(255,215,120,.9)'); gr.addColorStop(1,'rgba(255,215,120,0)');
+    g.fillStyle = gr; g.fillRect(0,0,128,128); return new THREE.CanvasTexture(c); })();
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  glow.scale.set(1.1, 0.7, 1); root.add(glow);
+
+  let appear = 0;
+  const SIZE = window.__noCam ? 1 : 0.72;   // AR дээр картанд таарах хэмжээ   // 0..1 гарч ирэх хөдөлгөөн
+  function update(t, dt, visible) {
+    appear = THREE.MathUtils.clamp(appear + (visible ? dt * 1.6 : -dt * 4), 0, 1);
+    const e = 1 - Math.pow(1 - appear, 3);         // easeOutCubic
+    root.scale.setScalar(Math.max(e * SIZE, 0.0001));
+    textHolder.position.y = 0.25 + Math.sin(t * 1.6) * 0.025;
+    textHolder.rotation.y = Math.sin(t * 0.8) * 0.45;
+    ring.position.y = 0.05; ring.rotation.z = t * 0.6;
+    stars.position.y = 0.05; stars.rotation.y = -t * 0.6;
+    stars.children.forEach((s, i) => { s.rotation.y = t * 2 + i; s.position.y = Math.sin(t * 2 + i) * 0.03; });
+    glow.position.y = 0.25; glow.material.opacity = 0.55 + Math.sin(t * 2) * 0.15;
+    const p = sg.attributes.position.array;
+    for (let i = 0; i < N; i++) { p[i*3+1] -= spd[i] * dt; p[i*3] += Math.sin(t + i) * 0.0008;
+      if (p[i*3+1] < -0.3) p[i*3+1] = 1.1; }
+    sg.attributes.position.needsUpdate = true;
+  }
+  return { root, update };
+}
+
+function addEnv(renderer, scene) {
+  const pm = new THREE.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+  const d = new THREE.DirectionalLight(0xffffff, 1.6); d.position.set(0.3, 1, 1); scene.add(d); scene.add(new THREE.HemisphereLight(0xfff4d6, 0x223355, 0.9));
+}
+
+/* ===== AR горим ===== */
+let mindar = null;
+async function startAR() {
+  show('start', false); show('fail', false); show('loading');
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('nocam');
+    const { MindARThree } = await import('./lib/mindar-image-three.prod.js');
+    mindar = new MindARThree({
+      container: $('ar'), imageTargetSrc: CONFIG.target,
+      uiLoading: 'no', uiScanning: 'no', uiError: 'no',
+      filterMinCF: 0.0001, filterBeta: 0.001,   // чичиргээ багасгах
+      missTolerance: 8, warmupTolerance: 3,
+    });
+    const { renderer, scene, camera } = mindar;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    addEnv(renderer, scene);
+
+    const c = await buildContent();
+    // Картын координат: өргөн = 1, төв = (0,0). Медальон картын төвөөс 0.18 доор.
+    // Агуулгыг картаас "босгож" харагдуулна: x тэнхлэгээр 90° эргүүлнэ.
+    c.root.rotation.x = Math.PI / 3;   // 60° — гарт барьсан ч, ширээн дээр тавьсан ч харагдана
+    c.root.position.set(0, -0.18, 0);
+    const anchor = mindar.addAnchor(0);
+    anchor.group.add(c.root);
+    if (qs.get('debug') && qs.get('debug')!=='0') { const pl = new THREE.Mesh(new THREE.PlaneGeometry(1, 1748/1240), new THREE.MeshBasicMaterial({color:0xff0000, transparent:true, opacity:.35})); anchor.group.add(pl); if (qs.get('debug')==='2') c.root.visible=false; window.__anchor=anchor; window.__cam=camera; }
+
+    let found = false;
+    anchor.onTargetFound = () => { found = true; show('hint', false); show('frame', false); show('cta'); navigator.vibrate?.(30); };
+    anchor.onTargetLost  = () => { found = false; show('hint'); show('frame'); };
+
+    await mindar.start();
+    show('loading', false); show('hint'); show('frame');
+
+    const clock = new THREE.Clock();
+    renderer.setAnimationLoop(() => {
+      const dt = Math.min(clock.getDelta(), 0.05);
+      c.update(clock.elapsedTime, dt, found);
+      renderer.render(scene, camera);
+    });
+    window.__ar = { get found() { return found; } };
+  } catch (err) {
+    console.error(err);
+    try { mindar?.stop(); } catch (_) {}
+    show('loading', false); show('hint', false); show('frame', false);
+    $('failMsg').textContent = (err && (err.name === 'NotAllowedError'))
+      ? 'Камерын зөвшөөрөл олгоогүй байна. Хөтчийн тохиргооноос зөвшөөрөөд дахин оролдоно уу.'
+      : 'Камер нээгдсэнгүй эсвэл энэ утас AR дэмжихгүй байна.';
+    show('fail');
+  }
+}
+
+/* ===== Камергүй 3D горим ===== */
+let viewer = null;
+async function startNoCam() {
+  window.__noCam = true;
+  show('fail', false); show('start', false); show('view3d'); show('backbar'); show('cta');
+  if (viewer) return;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  $('view3d').appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x060f28);
+  addEnv(renderer, scene);
+  const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.01, 50);
+  camera.position.set(0, 0.45, 1.6);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0.22, 0); controls.enableDamping = true; controls.enablePan = false;
+  controls.minDistance = 0.8; controls.maxDistance = 3;
+  const c = await buildContent(); scene.add(c.root);
+  addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+  const clock = new THREE.Clock();
+  renderer.setAnimationLoop(() => { const dt = Math.min(clock.getDelta(), .05); c.update(clock.elapsedTime, dt, true); controls.update(); renderer.render(scene, camera); });
+  viewer = renderer;
+}
+
+$('btnStart').onclick = startAR;
+$('btnRetry').onclick = () => location.reload();
+$('btnNoCam').onclick = startNoCam;
+$('btnBack').onclick = () => location.reload();
+if (qs.get('auto') === '1') startAR();
+</script>
+</body>
+</html>
