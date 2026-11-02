@@ -90,7 +90,7 @@
       <div class="year"><span class="flow gold" data-t="2.3" style="--d:.9s">2027</span></div>
       <div class="div"><i></i><b></b><i></i></div>
       <div class="dear"><span class="flow" data-t="3.1" style="--d:.7s">Эрхэм хүндэт</span></div>
-      <div class="name"><span class="flow" id="guest" data-t="3.6" style="--d:1.2s">Г.Түмэн-Өлзий танаа</span></div>
+      <div class="name"><span class="flow" id="guest" data-t="3.6" style="--d:1.2s">Эрхэм зочин танаа</span></div>
       <div class="txt"><span class="flow" data-t="4.6" style="--d:1.2s">Шинэ оны баярын хүлээн авалтад<br>хүндэтгэн урьж байна</span></div>
     </div>
   </section>
@@ -140,7 +140,7 @@
 <script type="module">
 /* ===== Зочны нэр (?n=) ===== */
 const qs = new URLSearchParams(location.search);
-const guest = (qs.get('n') || 'Г.Түмэн-Өлзий').trim();
+const guest = (qs.get('n') || 'Эрхэм зочин').trim().slice(0, 60);
 document.getElementById('guest').textContent = guest + ' танаа';
 
 /* ===== Урсаж бичигдэх эффект ===== */
